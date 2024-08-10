@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 contract Staking is ReentrancyGuard {
     IERC20 public stakingToken;
@@ -23,14 +23,18 @@ contract Staking is ReentrancyGuard {
         rewardsToken = IERC20(_rewardsToken);
     }
 
-    function stake(uint256 amount) external nonReentrant updateReward(msg.sender) {
+    function stake(
+        uint256 amount
+    ) external nonReentrant updateReward(msg.sender) {
         require(amount > 0, "Cannot stake 0");
         _totalSupply += amount;
         _balances[msg.sender] += amount;
         stakingToken.transferFrom(msg.sender, address(this), amount);
     }
 
-    function withdraw(uint256 amount) external nonReentrant updateReward(msg.sender) {
+    function withdraw(
+        uint256 amount
+    ) external nonReentrant updateReward(msg.sender) {
         require(amount > 0, "Cannot withdraw 0");
         _totalSupply -= amount;
         _balances[msg.sender] -= amount;
@@ -51,7 +55,8 @@ contract Staking is ReentrancyGuard {
         }
         return
             rewardPerTokenStored +
-            ((block.timestamp - lastUpdateTime) * rewardRate * 1e18) / _totalSupply;
+            ((block.timestamp - lastUpdateTime) * rewardRate * 1e18) /
+            _totalSupply;
     }
 
     function earned(address account) public view returns (uint256) {

@@ -6,13 +6,16 @@ import "../src/Staking.sol";
 import "../src/Token.sol";
 
 contract StakingTest is Test {
-    MyToken stakingToken;
-    MyToken rewardsToken;
+    TaraChatToken stakingToken;
+    TaraChatToken rewardsToken;
     Staking staking;
 
     function setUp() public {
-        stakingToken = new MyToken(1000 * 10 ** 18);
-        rewardsToken = new MyToken(1000 * 10 ** 18);
+        stakingToken = new TaraChatToken();
+        rewardsToken = new TaraChatToken();
+
+        // Assuming the deployer (address(this)) has the required permissions automatically
+
         staking = new Staking(address(stakingToken), address(rewardsToken));
 
         stakingToken.mint(address(this), 100 * 10 ** 18);
