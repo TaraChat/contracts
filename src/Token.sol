@@ -22,7 +22,7 @@ contract TaraChatToken is
      * The total supply of the token is set to 1_000_000_000. This establishes the upper limit
      * of tokens that will ever be in circulation on Ethereum network.
      */
-    uint256 private _totalSupply = 1_000_000_000 * (10 ** 18);
+    uint256 private _totalSupply = 1_000_000_000e18;
 
     /**
      *
@@ -64,7 +64,7 @@ contract TaraChatToken is
                 _marketingPromotion +
                 _ecosystemDevelopment);
 
-    uint256 private _cap = 10_000_000_000 * (10 ** 18);
+    uint256 private _cap = 10_000_000_000e18;
 
     event CapUpdated(uint256 newCap);
 
