@@ -23,7 +23,7 @@ contract TaraChatGovernor is
         Governor("TaraChatGovernor")
         GovernorSettings(1 days, 1 weeks, 50000000e18)
         GovernorVotes(_token)
-        GovernorVotesQuorumFraction(51)
+        GovernorVotesQuorumFraction(30)
         GovernorTimelockControl(_timelock)
     {}
 
