@@ -4,8 +4,8 @@ pragma solidity ^0.8.20;
 
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Burnable} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import {AccessManaged} from "@openzeppelin/contracts/access/manager/AccessManaged.sol";
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
@@ -14,7 +14,7 @@ import {VestingWallet} from "@openzeppelin/contracts/finance/VestingWallet.sol";
 contract TaraChatToken is
     ERC20,
     ERC20Burnable,
-    AccessManaged,
+    Ownable,
     ERC20Permit,
     ERC20Votes
 {
@@ -68,12 +68,9 @@ contract TaraChatToken is
 
     event CapUpdated(uint256 newCap);
 
-    constructor()
-        ERC20("TaraChat Token", "TCHAT")
-        AccessManaged(msg.sender)
-        ERC20Permit("TaraChat Token")
-        ERC20Votes()
-    {
+    constructor(
+        address initialOwner
+    ) ERC20("MyToken", "MTK") Ownable(initialOwner) ERC20Permit("MyToken") {
         address ecosystemDevelopmentVesting = address(
             new VestingWallet(
                 0x609D40C1d5750ff03a3CafF30152AD03243c02cB,
@@ -125,16 +122,16 @@ contract TaraChatToken is
         return _cap;
     }
 
-    function setCap(uint256 newCap) public restricted {
+    function setCap(uint256 newCap) public onlyOwner {
         require(
             newCap >= totalSupply(),
             "New cap must be greater than or equal to total supply"
         );
-        _cap = newCap * (10 ** decimals());
+        _cap = newCap;
         emit CapUpdated(_cap);
     }
 
-    function mint(address to, uint256 amount) public restricted {
+    function mint(address to, uint256 amount) public onlyOwner {
         _mintCapped(to, amount);
     }
 
@@ -142,6 +139,17 @@ contract TaraChatToken is
         require(totalSupply() + amount <= _cap, "ERC20Capped: cap exceeded");
         _mint(account, amount);
     }
+
+    function clock() public view override returns (uint48) {
+        return uint48(block.timestamp);
+    }
+
+    // solhint-disable-next-line func-name-mixedcase
+    function CLOCK_MODE() public pure override returns (string memory) {
+        return "mode=timestamp";
+    }
+
+    // The following functions are overrides required by Solidity.
 
     function _update(
         address from,
@@ -151,7 +159,6 @@ contract TaraChatToken is
         super._update(from, to, value);
     }
 
-    // Override the nonces function
     function nonces(
         address owner
     ) public view override(ERC20Permit, Nonces) returns (uint256) {
