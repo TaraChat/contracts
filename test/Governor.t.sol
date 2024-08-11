@@ -7,17 +7,6 @@ import "../src/Token.sol";
 import "@openzeppelin/contracts/governance/TimelockController.sol";
 
 contract GovernorTest is Test {
-    enum ProposalState {
-        Pending,
-        Active,
-        Canceled,
-        Defeated,
-        Succeeded,
-        Queued,
-        Expired,
-        Executed
-    }
-
     TaraChatGovernor public governor;
     TaraChatToken public token;
     TimelockController public timelock;
@@ -49,9 +38,17 @@ contract GovernorTest is Test {
         token.mint(deployer, 51_000_000e18);
         token.mint(voter1, 850_000_000e18);
         token.mint(voter2, 51_000_000e18);
+
         vm.warp(block.timestamp + 1);
-        token.delegate(voter2);
         governor = new TaraChatGovernor(token, timelock);
+
+        // Grant the Governor the executor role on the TimelockController
+        timelock.grantRole(timelock.EXECUTOR_ROLE(), address(governor));
+        timelock.grantRole(timelock.PROPOSER_ROLE(), address(governor));
+
+        // Transfer ownership of the token to the timelock or governor
+        token.transferOwnership(address(timelock));
+
         vm.stopPrank();
     }
 
@@ -114,6 +111,9 @@ contract GovernorTest is Test {
     }
 
     function testQueueAndExecute() public {
+        vm.startPrank(deployer);
+
+        vm.stopPrank();
         vm.startPrank(voter1);
 
         // Delegate votes to self
@@ -127,15 +127,18 @@ contract GovernorTest is Test {
         uint256[] memory values = new uint256[](1);
         bytes[] memory calldatas = new bytes[](1);
 
-        targets[0] = targetContract;
+        targets[0] = address(token);
         values[0] = 0;
-        calldatas[0] = abi.encodeWithSignature("someFunction()");
+        calldatas[0] = abi.encodeWithSignature(
+            "setCap(uint256)",
+            20_000_000_000e18
+        );
 
         uint256 proposalId = governor.propose(
             targets,
             values,
             calldatas,
-            "Proposal: Call someFunction"
+            "Proposal: Change token cap to 20 billion"
         );
 
         // Move forward in time to start voting
@@ -160,7 +163,9 @@ contract GovernorTest is Test {
                 targets,
                 values,
                 calldatas,
-                keccak256(abi.encodePacked("Proposal: Call someFunction"))
+                keccak256(
+                    abi.encodePacked("Proposal: Change token cap to 20 billion")
+                )
             );
 
             assertEq(
@@ -175,7 +180,9 @@ contract GovernorTest is Test {
                 targets,
                 values,
                 calldatas,
-                keccak256(abi.encodePacked("Proposal: Call someFunction"))
+                keccak256(
+                    abi.encodePacked("Proposal: Change token cap to 20 billion")
+                )
             );
 
             assertEq(
