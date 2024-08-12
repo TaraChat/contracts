@@ -32,7 +32,7 @@ contract VestingWalletTest is Test {
         marketingWallet = token.marketingPromotionVestingWallet();
     }
 
-    function testVestingWalletBalances() public {
+    function testVestingWalletBalances() public view {
         // Verify the initial balances in the vesting wallets
         assertEq(
             token.balanceOf(ecosystemWallet),
