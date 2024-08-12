@@ -70,7 +70,11 @@ contract TaraChatToken is
 
     constructor(
         address initialOwner
-    ) ERC20("MyToken", "MTK") Ownable(initialOwner) ERC20Permit("MyToken") {
+    )
+        ERC20("TaraChat Token", "TCHAT")
+        Ownable(initialOwner)
+        ERC20Permit("TaraChat Token")
+    {
         address ecosystemDevelopmentVesting = address(
             new VestingWallet(
                 0x609D40C1d5750ff03a3CafF30152AD03243c02cB,

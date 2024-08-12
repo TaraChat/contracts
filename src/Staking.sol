@@ -1,77 +1,131 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.24;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract Staking is ReentrancyGuard {
-    IERC20 public stakingToken;
-    IERC20 public rewardsToken;
+contract DiscreteStakingRewards is Ownable {
+    IERC20 public immutable token;
 
-    uint256 public rewardRate = 100;
-    uint256 public lastUpdateTime;
-    uint256 public rewardPerTokenStored;
-
-    mapping(address => uint256) public userRewardPerTokenPaid;
-    mapping(address => uint256) public rewards;
-
-    uint256 private _totalSupply;
-    mapping(address => uint256) private _balances;
-
-    constructor(address _stakingToken, address _rewardsToken) {
-        stakingToken = IERC20(_stakingToken);
-        rewardsToken = IERC20(_rewardsToken);
+    struct UnstakeRequest {
+        uint256 amount;
+        uint256 unstakeTimestamp;
+        bool isActive;
     }
 
-    function stake(
-        uint256 amount
-    ) external nonReentrant updateReward(msg.sender) {
-        require(amount > 0, "Cannot stake 0");
-        _totalSupply += amount;
-        _balances[msg.sender] += amount;
-        stakingToken.transferFrom(msg.sender, address(this), amount);
+    mapping(address => uint256) public balanceOf;
+    uint256 public totalSupply;
+
+    mapping(address => UnstakeRequest) public unstakeRequests;
+
+    uint256 private constant MULTIPLIER = 1e18;
+    uint256 private rewardIndex;
+    mapping(address => uint256) private rewardIndexOf;
+    mapping(address => uint256) private earned;
+
+    constructor(address _token) Ownable(msg.sender) {
+        token = IERC20(_token);
     }
 
-    function withdraw(
-        uint256 amount
-    ) external nonReentrant updateReward(msg.sender) {
-        require(amount > 0, "Cannot withdraw 0");
-        _totalSupply -= amount;
-        _balances[msg.sender] -= amount;
-        stakingToken.transfer(msg.sender, amount);
+    function updateRewardIndex(uint256 reward) external {
+        token.transferFrom(msg.sender, address(this), reward);
+        rewardIndex += (reward * MULTIPLIER) / totalSupply;
     }
 
-    function getReward() external nonReentrant updateReward(msg.sender) {
-        uint256 reward = rewards[msg.sender];
+    function _calculateRewards(address account) private view returns (uint256) {
+        uint256 shares = balanceOf[account];
+        return (shares * (rewardIndex - rewardIndexOf[account])) / MULTIPLIER;
+    }
+
+    function calculateRewardsEarned(
+        address account
+    ) external view returns (uint256) {
+        if (unstakeRequests[account].isActive) {
+            // If unstaking is active, do not calculate rewards during the unstaking period
+            return earned[account];
+        }
+        return earned[account] + _calculateRewards(account);
+    }
+
+    function _updateRewards(address account) private {
+        if (!unstakeRequests[account].isActive) {
+            earned[account] += _calculateRewards(account);
+        }
+        rewardIndexOf[account] = rewardIndex;
+    }
+
+    function stake(uint256 amount) external {
+        _updateRewards(msg.sender);
+
+        balanceOf[msg.sender] += amount;
+        totalSupply += amount;
+
+        // This will succeed if the user has approved the Staking contract to transfer the tokens
+        token.transferFrom(msg.sender, address(this), amount);
+
+        // Cancel any active unstake request if the user stakes more tokens
+        if (unstakeRequests[msg.sender].isActive) {
+            unstakeRequests[msg.sender] = UnstakeRequest(0, 0, false);
+        }
+    }
+
+    function requestUnstake(uint256 amount) external {
+        require(
+            balanceOf[msg.sender] >= amount,
+            "Insufficient balance to unstake"
+        );
+        _updateRewards(msg.sender);
+
+        // Record the unstake request
+        unstakeRequests[msg.sender] = UnstakeRequest(
+            amount,
+            block.timestamp,
+            true
+        );
+
+        // Reduce staked balance immediately
+        balanceOf[msg.sender] -= amount;
+        totalSupply -= amount;
+    }
+
+    function cancelUnstake() external {
+        require(
+            unstakeRequests[msg.sender].isActive,
+            "No active unstake request to cancel"
+        );
+
+        // Restore the staked balance
+        balanceOf[msg.sender] += unstakeRequests[msg.sender].amount;
+        totalSupply += unstakeRequests[msg.sender].amount;
+
+        // Cancel the unstake request
+        unstakeRequests[msg.sender] = UnstakeRequest(0, 0, false);
+    }
+
+    function finalizeUnstake() external {
+        UnstakeRequest memory request = unstakeRequests[msg.sender];
+        require(request.isActive, "No active unstake request");
+        require(
+            block.timestamp >= request.unstakeTimestamp + 30 days,
+            "Unstaking period not yet completed"
+        );
+
+        // Complete the unstake by transferring tokens back to the user
+        token.transfer(msg.sender, request.amount);
+
+        // Clear the unstake request
+        unstakeRequests[msg.sender] = UnstakeRequest(0, 0, false);
+    }
+
+    function claim() external returns (uint256) {
+        _updateRewards(msg.sender);
+
+        uint256 reward = earned[msg.sender];
         if (reward > 0) {
-            rewards[msg.sender] = 0;
-            rewardsToken.transfer(msg.sender, reward);
+            earned[msg.sender] = 0;
+            token.transfer(msg.sender, reward);
         }
-    }
 
-    function rewardPerToken() public view returns (uint256) {
-        if (_totalSupply == 0) {
-            return rewardPerTokenStored;
-        }
-        return
-            rewardPerTokenStored +
-            ((block.timestamp - lastUpdateTime) * rewardRate * 1e18) /
-            _totalSupply;
-    }
-
-    function earned(address account) public view returns (uint256) {
-        return
-            (_balances[account] *
-                (rewardPerToken() - userRewardPerTokenPaid[account])) /
-            1e18 +
-            rewards[account];
-    }
-
-    modifier updateReward(address account) {
-        rewardPerTokenStored = rewardPerToken();
-        lastUpdateTime = block.timestamp;
-        rewards[account] = earned(account);
-        userRewardPerTokenPaid[account] = rewardPerTokenStored;
-        _;
+        return reward;
     }
 }
